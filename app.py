@@ -1,8 +1,31 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from pathlib import Path
 from datetime import date
+
+from database import (
+    init_database,
+    get_user_by_id,
+    get_user_transactions,
+    add_transaction,
+    delete_transaction,
+    update_budget,
+    get_all_users,
+    update_user_status,
+    count_users,
+    count_active_users,
+    count_transactions,
+    total_income,
+    total_expenses,
+    get_all_transactions
+)
+
+from auth import (
+    register_user,
+    create_first_admin,
+    login_user
+)
+
 
 # =========================================================
 # CONFIG
@@ -15,58 +38,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-DATA_FILE = Path("finance_data.csv")
-
-COLUMNS = [
-    "ID",
-    "Date",
-    "Type",
-    "Category",
-    "Description",
-    "Amount"
-]
-
-INCOME_CATEGORIES = [
-    "Salary",
-    "Freelance",
-    "Business",
-    "Investment",
-    "Gift",
-    "Other Income"
-]
-
-EXPENSE_CATEGORIES = [
-    "Food",
-    "Transport",
-    "Shopping",
-    "Bills",
-    "Education",
-    "Health",
-    "Entertainment",
-    "Rent",
-    "Travel",
-    "Other"
-]
+init_database()
 
 
 # =========================================================
-# PREMIUM CSS
+# CSS
 # =========================================================
 
 st.markdown("""
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url(
+'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
+);
 
 * {
     font-family: 'Inter', sans-serif;
 }
 
 .stApp {
-    background: #f6f8fc;
+    background: #f5f7fb;
 }
 
-/* Hide Streamlit branding */
 #MainMenu {
     visibility: hidden;
 }
@@ -79,200 +72,147 @@ header {
     visibility: hidden;
 }
 
-/* Sidebar */
+.block-container {
+    max-width: 1450px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
 section[data-testid="stSidebar"] {
     background: #111827;
-    border-right: 1px solid #1f2937;
 }
 
 section[data-testid="stSidebar"] * {
     color: #e5e7eb;
 }
 
-.sidebar-logo {
+.logo {
     font-size: 25px;
     font-weight: 800;
     color: white;
-    margin-bottom: 4px;
 }
 
-.sidebar-subtitle {
+.logo-sub {
     color: #9ca3af;
     font-size: 12px;
     margin-bottom: 30px;
 }
 
-/* Main container */
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-    max-width: 1450px;
-}
-
-/* Header */
-.dashboard-title {
+.page-title {
     font-size: 32px;
     font-weight: 800;
     color: #111827;
-    margin-bottom: 4px;
 }
 
-.dashboard-subtitle {
+.page-subtitle {
     color: #6b7280;
     font-size: 14px;
+    margin-bottom: 25px;
 }
 
-/* Cards */
 .metric-card {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 18px;
     padding: 22px;
     min-height: 145px;
-    box-shadow: 0 5px 20px rgba(17,24,39,0.04);
-}
-
-.metric-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    box-shadow: 0 5px 20px rgba(17,24,39,.04);
 }
 
 .metric-label {
     color: #6b7280;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.metric-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #f3f4f6;
-    font-size: 19px;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .metric-value {
+    color: #111827;
     font-size: 27px;
     font-weight: 800;
-    color: #111827;
-    margin-top: 18px;
+    margin-top: 15px;
 }
 
-.metric-positive {
+.metric-small {
     color: #059669;
     font-size: 12px;
     font-weight: 600;
 }
 
-.metric-negative {
-    color: #dc2626;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-/* Section */
-.section-title {
-    font-size: 20px;
-    font-weight: 750;
-    color: #111827;
-    margin-top: 25px;
-    margin-bottom: 4px;
-}
-
-.section-subtitle {
-    color: #6b7280;
-    font-size: 13px;
-    margin-bottom: 15px;
-}
-
-/* White panels */
 .panel {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 18px;
-    padding: 20px;
-    box-shadow: 0 5px 20px rgba(17,24,39,0.04);
-}
-
-/* Budget */
-.budget-box {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 18px;
     padding: 22px;
-    margin-top: 20px;
+    box-shadow: 0 5px 20px rgba(17,24,39,.04);
 }
 
-.budget-title {
-    font-weight: 700;
-    font-size: 16px;
-    color: #111827;
-}
-
-.budget-amount {
-    font-size: 24px;
+.section-title {
+    font-size: 20px;
     font-weight: 800;
-    margin-top: 8px;
+    margin-top: 28px;
+    margin-bottom: 5px;
 }
 
-/* Buttons */
+.login-box {
+    max-width: 480px;
+    margin: 70px auto;
+    background: white;
+    padding: 40px;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 15px 50px rgba(0,0,0,.08);
+}
+
+.login-logo {
+    text-align: center;
+    font-size: 32px;
+    font-weight: 800;
+    margin-bottom: 5px;
+}
+
+.login-subtitle {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+}
+
 .stButton > button {
     border-radius: 10px;
-    border: 1px solid #e5e7eb;
-    font-weight: 600;
     min-height: 42px;
+    font-weight: 600;
 }
 
-.stButton > button:hover {
-    border-color: #111827;
-}
-
-/* Form */
 div[data-testid="stForm"] {
-    background: white;
-    border: 1px solid #e5e7eb;
     border-radius: 18px;
+    border: 1px solid #e5e7eb;
     padding: 25px;
 }
 
-/* Inputs */
-input, textarea {
-    border-radius: 10px !important;
+.admin-badge {
+    display: inline-block;
+    background: #ede9fe;
+    color: #6d28d9;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
 }
 
-/* Divider */
-hr {
-    border-color: #e5e7eb;
-}
-
-/* Transaction badge */
-.income-badge {
-    color: #047857;
+.user-badge {
+    display: inline-block;
     background: #ecfdf5;
+    color: #047857;
     padding: 5px 10px;
     border-radius: 20px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
 }
 
-.expense-badge {
-    color: #b91c1c;
-    background: #fef2f2;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-weight: 600;
-}
-
-/* Footer */
 .footer {
     text-align: center;
     color: #9ca3af;
+    margin-top: 50px;
     font-size: 12px;
-    margin-top: 40px;
-    padding: 20px;
 }
 
 </style>
@@ -280,69 +220,159 @@ hr {
 
 
 # =========================================================
-# DATA FUNCTIONS
+# SESSION
 # =========================================================
 
-def create_file():
-    if not DATA_FILE.exists():
-        pd.DataFrame(columns=COLUMNS).to_csv(DATA_FILE, index=False)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-
-def load_data():
-    create_file()
-
-    df = pd.read_csv(DATA_FILE)
-
-    if df.empty:
-        return pd.DataFrame(columns=COLUMNS)
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
-
-    return df
-
-
-def save_data(df):
-    df.to_csv(DATA_FILE, index=False)
-
-
-def add_transaction(transaction_type, category, description, amount, transaction_date):
-
-    df = load_data()
-
-    if df.empty:
-        new_id = 1
-    else:
-        new_id = int(df["ID"].max()) + 1
-
-    new_row = pd.DataFrame([{
-        "ID": new_id,
-        "Date": transaction_date,
-        "Type": transaction_type,
-        "Category": category,
-        "Description": description,
-        "Amount": amount
-    }])
-
-    df = pd.concat([df, new_row], ignore_index=True)
-
-    save_data(df)
-
-
-def delete_transaction(transaction_id):
-
-    df = load_data()
-
-    df = df[df["ID"] != transaction_id]
-
-    save_data(df)
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
 
 
 # =========================================================
-# LOAD DATA
+# LOGIN / SIGNUP
 # =========================================================
 
-df = load_data()
+def authentication_page():
+
+    st.markdown(
+        '<div class="login-box">',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="login-logo">💰 FinanceFlow</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="login-subtitle">Personal Finance Management</div>',
+        unsafe_allow_html=True
+    )
+
+    login_tab, signup_tab = st.tabs([
+        "🔐 Login",
+        "✨ Create Account"
+    ])
+
+    with login_tab:
+
+        with st.form("login_form"):
+
+            email = st.text_input(
+                "Email",
+                placeholder="you@example.com"
+            )
+
+            password = st.text_input(
+                "Password",
+                type="password"
+            )
+
+            submitted = st.form_submit_button(
+                "Login",
+                use_container_width=True
+            )
+
+            if submitted:
+
+                success, message, user = login_user(
+                    email,
+                    password
+                )
+
+                if success:
+
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user["id"]
+
+                    st.rerun()
+
+                else:
+
+                    st.error(message)
+
+    with signup_tab:
+
+        with st.form("signup_form"):
+
+            name = st.text_input(
+                "Full Name"
+            )
+
+            email = st.text_input(
+                "Email Address"
+            )
+
+            password = st.text_input(
+                "Password",
+                type="password",
+                help="At least 8 characters, uppercase, lowercase and number."
+            )
+
+            confirm_password = st.text_input(
+                "Confirm Password",
+                type="password"
+            )
+
+            submitted = st.form_submit_button(
+                "Create Account",
+                use_container_width=True
+            )
+
+            if submitted:
+
+                if password != confirm_password:
+
+                    st.error("Passwords do not match.")
+
+                else:
+
+                    success, message = register_user(
+                        name,
+                        email,
+                        password
+                    )
+
+                    if success:
+                        st.success(
+                            "Account created! You can now login."
+                        )
+                    else:
+                        st.error(message)
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# IF NOT LOGGED IN
+# =========================================================
+
+if not st.session_state.logged_in:
+
+    authentication_page()
+
+    st.stop()
+
+
+# =========================================================
+# CURRENT USER
+# =========================================================
+
+user = get_user_by_id(
+    st.session_state.user_id
+)
+
+if not user:
+
+    st.session_state.logged_in = False
+    st.session_state.user_id = None
+
+    st.rerun()
 
 
 # =========================================================
@@ -351,180 +381,224 @@ df = load_data()
 
 with st.sidebar:
 
-    st.markdown("""
-    <div class="sidebar-logo">💰 FinanceFlow</div>
-    <div class="sidebar-subtitle">Personal Finance Manager</div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### Navigation")
-
-    page = st.radio(
-        "",
-        [
-            "🏠 Dashboard",
-            "💳 Transactions",
-            "📊 Analytics",
-            "⚙️ Settings"
-        ],
-        label_visibility="collapsed"
+    st.markdown(
+        '<div class="logo">💰 FinanceFlow</div>',
+        unsafe_allow_html=True
     )
+
+    st.markdown(
+        '<div class="logo-sub">Personal Finance Manager</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        f"### 👋 {user['name']}"
+    )
+
+    if user["role"] == "admin":
+
+        st.markdown(
+            '<span class="admin-badge">ADMIN</span>',
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            '<span class="user-badge">USER</span>',
+            unsafe_allow_html=True
+        )
 
     st.divider()
 
-    st.markdown("### Monthly Budget")
+    if user["role"] == "admin":
 
-    monthly_budget = st.number_input(
-        "Budget",
-        min_value=0.0,
-        value=100000.0,
-        step=5000.0,
-        format="%.0f"
-    )
+        navigation = st.radio(
+            "Navigation",
+            [
+                "🏠 Dashboard",
+                "💳 Transactions",
+                "📊 Analytics",
+                "🛡️ Admin Panel",
+                "⚙️ Settings"
+            ]
+        )
+
+    else:
+
+        navigation = st.radio(
+            "Navigation",
+            [
+                "🏠 Dashboard",
+                "💳 Transactions",
+                "📊 Analytics",
+                "⚙️ Settings"
+            ]
+        )
 
     st.divider()
 
-    st.caption("FinanceFlow v1.0")
-    st.caption("Local & private")
+    if st.button(
+        "🚪 Logout",
+        use_container_width=True
+    ):
+
+        st.session_state.logged_in = False
+        st.session_state.user_id = None
+
+        st.rerun()
 
 
 # =========================================================
-# CALCULATIONS
+# USER DATA
 # =========================================================
 
-income = df.loc[df["Type"] == "Income", "Amount"].sum()
+transactions = get_user_transactions(
+    user["id"]
+)
 
-expenses = df.loc[df["Type"] == "Expense", "Amount"].sum()
+df = pd.DataFrame(transactions)
+
+if not df.empty:
+
+    df["date"] = pd.to_datetime(
+        df["date"],
+        errors="coerce"
+    )
+
+    df["amount"] = pd.to_numeric(
+        df["amount"],
+        errors="coerce"
+    )
+
+
+income = (
+    df.loc[df["type"] == "Income", "amount"].sum()
+    if not df.empty
+    else 0
+)
+
+expenses = (
+    df.loc[df["type"] == "Expense", "amount"].sum()
+    if not df.empty
+    else 0
+)
 
 balance = income - expenses
 
-if income > 0:
-    savings_rate = (balance / income) * 100
-else:
-    savings_rate = 0
-
-budget_used = expenses
-
-if monthly_budget > 0:
-    budget_percentage = min((budget_used / monthly_budget) * 100, 100)
-else:
-    budget_percentage = 0
+savings_rate = (
+    (balance / income) * 100
+    if income > 0
+    else 0
+)
 
 
 # =========================================================
 # DASHBOARD
 # =========================================================
 
-if page == "🏠 Dashboard":
+if navigation == "🏠 Dashboard":
 
     st.markdown(
-        '<div class="dashboard-title">Good evening 👋</div>',
+        '<div class="page-title">Dashboard</div>',
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="dashboard-subtitle">Here is your financial overview.</div>',
+        f'<div class="page-subtitle">Welcome back, {user["name"]}. Here is your financial overview.</div>',
         unsafe_allow_html=True
     )
-
-    st.write("")
-
-    # ================= METRICS =================
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
+
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-top">
-                <div class="metric-label">TOTAL INCOME</div>
-                <div class="metric-icon">💵</div>
-            </div>
+            <div class="metric-label">TOTAL INCOME</div>
             <div class="metric-value">Rs {income:,.0f}</div>
-            <div class="metric-positive">Money received</div>
+            <div class="metric-small">Money received</div>
         </div>
         """, unsafe_allow_html=True)
 
     with c2:
+
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-top">
-                <div class="metric-label">TOTAL EXPENSES</div>
-                <div class="metric-icon">💸</div>
-            </div>
+            <div class="metric-label">TOTAL EXPENSES</div>
             <div class="metric-value">Rs {expenses:,.0f}</div>
-            <div class="metric-negative">Money spent</div>
+            <div class="metric-small">Money spent</div>
         </div>
         """, unsafe_allow_html=True)
 
     with c3:
-        balance_class = "metric-positive" if balance >= 0 else "metric-negative"
 
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-top">
-                <div class="metric-label">BALANCE</div>
-                <div class="metric-icon">💰</div>
-            </div>
+            <div class="metric-label">BALANCE</div>
             <div class="metric-value">Rs {balance:,.0f}</div>
-            <div class="{balance_class}">Available balance</div>
+            <div class="metric-small">Current balance</div>
         </div>
         """, unsafe_allow_html=True)
 
     with c4:
+
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-top">
-                <div class="metric-label">SAVINGS RATE</div>
-                <div class="metric-icon">📈</div>
-            </div>
+            <div class="metric-label">SAVINGS RATE</div>
             <div class="metric-value">{savings_rate:.1f}%</div>
-            <div class="metric-positive">Income saved</div>
+            <div class="metric-small">Income saved</div>
         </div>
         """, unsafe_allow_html=True)
 
-    # ================= BUDGET =================
+    # Budget
 
     st.markdown(
         '<div class="section-title">Monthly Budget</div>',
         unsafe_allow_html=True
     )
 
-    st.markdown(
-        '<div class="section-subtitle">Track your spending against your monthly limit.</div>',
-        unsafe_allow_html=True
+    budget = user["budget"]
+
+    budget_percentage = (
+        (expenses / budget) * 100
+        if budget > 0
+        else 0
     )
 
     st.markdown(
         f"""
-        <div class="budget-box">
-            <div class="budget-title">Budget Used</div>
-            <div class="budget-amount">
-                Rs {budget_used:,.0f}
-                <span style="font-size:14px;color:#6b7280;">
-                    / Rs {monthly_budget:,.0f}
-                </span>
-            </div>
+        <div class="panel">
+            <b>Budget</b>
+            <h2>Rs {expenses:,.0f} / Rs {budget:,.0f}</h2>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    st.progress(budget_percentage / 100)
+    st.progress(
+        min(budget_percentage / 100, 1.0)
+    )
 
-    if budget_used > monthly_budget:
+    if budget_percentage >= 100:
+
         st.error(
-            f"⚠️ Budget exceeded by Rs {budget_used - monthly_budget:,.0f}"
+            f"⚠️ Budget exceeded by Rs {expenses - budget:,.0f}"
         )
+
     elif budget_percentage >= 80:
+
         st.warning(
             f"⚠️ You have used {budget_percentage:.1f}% of your budget."
         )
+
     else:
+
         st.success(
             f"✓ You have used {budget_percentage:.1f}% of your budget."
         )
 
-    # ================= CHARTS =================
+    # Charts
 
     st.markdown(
         '<div class="section-title">Financial Overview</div>',
@@ -544,30 +618,37 @@ if page == "🏠 Dashboard":
 
         if not df.empty:
 
-            monthly = df.copy()
+            chart_df = df.copy()
 
-            monthly["Month"] = monthly["Date"].dt.strftime("%b %Y")
+            chart_df["Month"] = chart_df["date"].dt.strftime(
+                "%b %Y"
+            )
 
-            monthly_summary = (
-                monthly.groupby(["Month", "Type"])["Amount"]
+            monthly = (
+                chart_df
+                .groupby(["Month", "type"])["amount"]
                 .sum()
                 .reset_index()
             )
 
             fig = px.bar(
-                monthly_summary,
+                monthly,
                 x="Month",
-                y="Amount",
-                color="Type",
+                y="amount",
+                color="type",
                 barmode="group"
             )
 
             fig.update_layout(
                 height=350,
-                margin=dict(l=10, r=10, t=20, b=10),
+                margin=dict(
+                    l=10,
+                    r=10,
+                    t=20,
+                    b=10
+                ),
                 plot_bgcolor="white",
-                paper_bgcolor="white",
-                showlegend=True
+                paper_bgcolor="white"
             )
 
             st.plotly_chart(
@@ -577,7 +658,10 @@ if page == "🏠 Dashboard":
             )
 
         else:
-            st.info("Add transactions to see your financial chart.")
+
+            st.info(
+                "Add transactions to see your chart."
+            )
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -590,27 +674,36 @@ if page == "🏠 Dashboard":
 
         st.subheader("Spending by Category")
 
-        expense_df = df[df["Type"] == "Expense"]
+        expense_df = (
+            df[df["type"] == "Expense"]
+            if not df.empty
+            else pd.DataFrame()
+        )
 
         if not expense_df.empty:
 
-            category_data = (
-                expense_df.groupby("Category")["Amount"]
+            category_df = (
+                expense_df
+                .groupby("category")["amount"]
                 .sum()
                 .reset_index()
             )
 
             fig = px.pie(
-                category_data,
-                names="Category",
-                values="Amount",
+                category_df,
+                names="category",
+                values="amount",
                 hole=0.55
             )
 
             fig.update_layout(
                 height=350,
-                margin=dict(l=10, r=10, t=20, b=10),
-                showlegend=True
+                margin=dict(
+                    l=10,
+                    r=10,
+                    t=20,
+                    b=10
+                )
             )
 
             st.plotly_chart(
@@ -620,103 +713,70 @@ if page == "🏠 Dashboard":
             )
 
         else:
-            st.info("Add expenses to see spending categories.")
+
+            st.info(
+                "Add expenses to see spending categories."
+            )
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-    # ================= RECENT =================
-
-    st.markdown(
-        '<div class="section-title">Recent Transactions</div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<div class="section-subtitle">Your latest financial activity.</div>',
-        unsafe_allow_html=True
-    )
-
-    if not df.empty:
-
-        recent = df.sort_values(
-            "Date",
-            ascending=False
-        ).head(7).copy()
-
-        recent["Date"] = recent["Date"].dt.strftime("%d %b %Y")
-
-        recent["Amount"] = recent.apply(
-            lambda row:
-            f"+ Rs {row['Amount']:,.0f}"
-            if row["Type"] == "Income"
-            else f"- Rs {row['Amount']:,.0f}",
-            axis=1
-        )
-
-        st.dataframe(
-            recent[
-                [
-                    "Date",
-                    "Type",
-                    "Category",
-                    "Description",
-                    "Amount"
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-
-        st.info("No transactions yet. Add your first transaction below.")
 
 
 # =========================================================
 # TRANSACTIONS
 # =========================================================
 
-elif page == "💳 Transactions":
+elif navigation == "💳 Transactions":
 
     st.markdown(
-        '<div class="dashboard-title">Transactions</div>',
+        '<div class="page-title">Transactions</div>',
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="dashboard-subtitle">Manage your income and expenses.</div>',
+        '<div class="page-subtitle">Add and manage your financial activity.</div>',
         unsafe_allow_html=True
     )
 
-    st.write("")
+    with st.form("add_transaction"):
 
-    # ADD TRANSACTION
+        c1, c2 = st.columns(2)
 
-    st.markdown(
-        '<div class="section-title">Add Transaction</div>',
-        unsafe_allow_html=True
-    )
-
-    with st.form("transaction_form"):
-
-        col1, col2 = st.columns(2)
-
-        with col1:
+        with c1:
 
             transaction_type = st.selectbox(
-                "Transaction Type",
+                "Type",
                 ["Income", "Expense"]
             )
 
-            category_list = (
-                INCOME_CATEGORIES
-                if transaction_type == "Income"
-                else EXPENSE_CATEGORIES
-            )
+            if transaction_type == "Income":
+
+                categories = [
+                    "Salary",
+                    "Freelance",
+                    "Business",
+                    "Investment",
+                    "Gift",
+                    "Other Income"
+                ]
+
+            else:
+
+                categories = [
+                    "Food",
+                    "Transport",
+                    "Shopping",
+                    "Bills",
+                    "Education",
+                    "Health",
+                    "Entertainment",
+                    "Rent",
+                    "Travel",
+                    "Other"
+                ]
 
             category = st.selectbox(
                 "Category",
-                category_list
+                categories
             )
 
             amount = st.number_input(
@@ -725,7 +785,7 @@ elif page == "💳 Transactions":
                 step=100.0
             )
 
-        with col2:
+        with c2:
 
             transaction_date = st.date_input(
                 "Date",
@@ -745,23 +805,27 @@ elif page == "💳 Transactions":
         if submitted:
 
             if amount <= 0:
-                st.error("Amount must be greater than zero.")
+
+                st.error(
+                    "Amount must be greater than zero."
+                )
 
             else:
 
                 add_transaction(
+                    user["id"],
+                    transaction_date.isoformat(),
                     transaction_type,
                     category,
                     description,
-                    amount,
-                    transaction_date
+                    amount
                 )
 
-                st.success("Transaction added successfully!")
+                st.success(
+                    "Transaction added successfully!"
+                )
 
                 st.rerun()
-
-    # TRANSACTION HISTORY
 
     st.markdown(
         '<div class="section-title">Transaction History</div>',
@@ -770,133 +834,102 @@ elif page == "💳 Transactions":
 
     if not df.empty:
 
-        f1, f2, f3 = st.columns(3)
+        display_df = df.copy()
 
-        with f1:
-            type_filter = st.selectbox(
-                "Type",
-                ["All", "Income", "Expense"]
-            )
-
-        with f2:
-            categories = ["All"] + sorted(
-                df["Category"].dropna().unique().tolist()
-            )
-
-            category_filter = st.selectbox(
-                "Category",
-                categories
-            )
-
-        with f3:
-            search = st.text_input(
-                "Search",
-                placeholder="Search description..."
-            )
-
-        filtered = df.copy()
-
-        if type_filter != "All":
-            filtered = filtered[
-                filtered["Type"] == type_filter
-            ]
-
-        if category_filter != "All":
-            filtered = filtered[
-                filtered["Category"] == category_filter
-            ]
-
-        if search:
-            filtered = filtered[
-                filtered["Description"]
-                .astype(str)
-                .str.contains(search, case=False, na=False)
-            ]
-
-        filtered = filtered.sort_values(
-            "Date",
-            ascending=False
+        display_df["date"] = display_df["date"].dt.strftime(
+            "%d %b %Y"
         )
 
         st.dataframe(
-            filtered,
+            display_df,
             use_container_width=True,
             hide_index=True
         )
 
+        csv_data = display_df.to_csv(
+            index=False
+        ).encode("utf-8")
+
         st.download_button(
             "⬇️ Download CSV",
-            data=filtered.to_csv(index=False).encode("utf-8"),
-            file_name="finance_transactions.csv",
-            mime="text/csv"
+            csv_data,
+            "financeflow_transactions.csv",
+            "text/csv"
         )
 
         st.markdown("### Delete Transaction")
 
-        delete_id = st.number_input(
+        transaction_id = st.number_input(
             "Transaction ID",
             min_value=1,
             step=1
         )
 
-        if st.button("🗑️ Delete Transaction"):
+        if st.button("🗑️ Delete"):
 
-            if delete_id in df["ID"].values:
+            delete_transaction(
+                int(transaction_id),
+                user["id"]
+            )
 
-                delete_transaction(int(delete_id))
+            st.success(
+                "Transaction deleted."
+            )
 
-                st.success("Transaction deleted.")
-
-                st.rerun()
-
-            else:
-
-                st.error("Transaction ID not found.")
+            st.rerun()
 
     else:
 
-        st.info("No transactions available.")
+        st.info(
+            "No transactions yet."
+        )
 
 
 # =========================================================
 # ANALYTICS
 # =========================================================
 
-elif page == "📊 Analytics":
+elif navigation == "📊 Analytics":
 
     st.markdown(
-        '<div class="dashboard-title">Analytics</div>',
+        '<div class="page-title">Analytics</div>',
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="dashboard-subtitle">Understand where your money goes.</div>',
+        '<div class="page-subtitle">Detailed view of your financial activity.</div>',
         unsafe_allow_html=True
     )
 
     if df.empty:
 
-        st.info("Add transactions to generate analytics.")
+        st.info(
+            "Add transactions to generate analytics."
+        )
 
     else:
 
-        expense_df = df[df["Type"] == "Expense"]
+        expense_df = df[
+            df["type"] == "Expense"
+        ]
 
         if not expense_df.empty:
 
-            category_data = (
-                expense_df.groupby("Category")["Amount"]
+            category_df = (
+                expense_df
+                .groupby("category")["amount"]
                 .sum()
-                .sort_values(ascending=False)
                 .reset_index()
+                .sort_values(
+                    "amount",
+                    ascending=False
+                )
             )
 
-            st.subheader("Expense Breakdown")
-
             fig = px.bar(
-                category_data,
-                x="Amount",
-                y="Category",
+                category_df,
+                x="amount",
+                y="category",
                 orientation="h"
             )
 
@@ -911,23 +944,24 @@ elif page == "📊 Analytics":
                 use_container_width=True
             )
 
-        st.subheader("All Financial Activity")
+        monthly_df = df.copy()
 
-        monthly = df.copy()
+        monthly_df["Month"] = monthly_df[
+            "date"
+        ].dt.strftime("%b %Y")
 
-        monthly["Month"] = monthly["Date"].dt.strftime("%b %Y")
-
-        monthly_summary = (
-            monthly.groupby(["Month", "Type"])["Amount"]
+        monthly = (
+            monthly_df
+            .groupby(["Month", "type"])["amount"]
             .sum()
             .reset_index()
         )
 
         fig = px.line(
-            monthly_summary,
+            monthly,
             x="Month",
-            y="Amount",
-            color="Type",
+            y="amount",
+            color="type",
             markers=True
         )
 
@@ -944,46 +978,266 @@ elif page == "📊 Analytics":
 
 
 # =========================================================
+# ADMIN PANEL
+# =========================================================
+
+elif navigation == "🛡️ Admin Panel":
+
+    if user["role"] != "admin":
+
+        st.error(
+            "Access denied."
+        )
+
+        st.stop()
+
+    st.markdown(
+        '<div class="page-title">Admin Panel</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="page-subtitle">Manage FinanceFlow users and system activity.</div>',
+        unsafe_allow_html=True
+    )
+
+    users_count = count_users()
+    active_count = count_active_users()
+    transactions_count = count_transactions()
+    system_income = total_income()
+    system_expenses = total_expenses()
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">TOTAL USERS</div>
+            <div class="metric-value">{users_count}</div>
+            <div class="metric-small">Registered accounts</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">ACTIVE USERS</div>
+            <div class="metric-value">{active_count}</div>
+            <div class="metric-small">Currently enabled</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">TRANSACTIONS</div>
+            <div class="metric-value">{transactions_count}</div>
+            <div class="metric-small">System-wide</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">SYSTEM BALANCE</div>
+            <div class="metric-value">Rs {system_income - system_expenses:,.0f}</div>
+            <div class="metric-small">All users</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="section-title">User Management</div>',
+        unsafe_allow_html=True
+    )
+
+    users = get_all_users()
+
+    if users:
+
+        users_df = pd.DataFrame(users)
+
+        users_df["Status"] = users_df[
+            "is_active"
+        ].map({
+            1: "Active",
+            0: "Disabled"
+        })
+
+        st.dataframe(
+            users_df[
+                [
+                    "id",
+                    "name",
+                    "email",
+                    "role",
+                    "Status",
+                    "budget",
+                    "created_at"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.markdown("### Change User Status")
+
+        user_ids = [
+            u["id"]
+            for u in users
+            if u["id"] != user["id"]
+        ]
+
+        if user_ids:
+
+            selected_user = st.selectbox(
+                "Select User",
+                user_ids
+            )
+
+            selected_record = get_user_by_id(
+                selected_user
+            )
+
+            st.write(
+                f"**{selected_record['name']}** — {selected_record['email']}"
+            )
+
+            if selected_record["is_active"]:
+
+                if st.button(
+                    "🔒 Disable User",
+                    use_container_width=True
+                ):
+
+                    update_user_status(
+                        selected_user,
+                        False
+                    )
+
+                    st.success(
+                        "User disabled."
+                    )
+
+                    st.rerun()
+
+            else:
+
+                if st.button(
+                    "🔓 Enable User",
+                    use_container_width=True
+                ):
+
+                    update_user_status(
+                        selected_user,
+                        True
+                    )
+
+                    st.success(
+                        "User enabled."
+                    )
+
+                    st.rerun()
+
+    st.markdown(
+        '<div class="section-title">All Transactions</div>',
+        unsafe_allow_html=True
+    )
+
+    all_transactions = get_all_transactions()
+
+    if all_transactions:
+
+        all_df = pd.DataFrame(
+            all_transactions
+        )
+
+        st.dataframe(
+            all_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.download_button(
+            "⬇️ Export System Transactions",
+            all_df.to_csv(
+                index=False
+            ).encode("utf-8"),
+            "financeflow_all_transactions.csv",
+            "text/csv"
+        )
+
+    else:
+
+        st.info(
+            "No system transactions yet."
+        )
+
+
+# =========================================================
 # SETTINGS
 # =========================================================
 
-elif page == "⚙️ Settings":
+elif navigation == "⚙️ Settings":
 
     st.markdown(
-        '<div class="dashboard-title">Settings</div>',
+        '<div class="page-title">Settings</div>',
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="dashboard-subtitle">Manage your FinanceFlow preferences.</div>',
+        '<div class="page-subtitle">Manage your account preferences.</div>',
         unsafe_allow_html=True
     )
 
-    st.write("")
-
-    st.subheader("Application")
-
-    st.info(
-        "Your financial data is stored locally in finance_data.csv."
+    st.markdown(
+        '<div class="section-title">Account</div>',
+        unsafe_allow_html=True
     )
 
-    st.subheader("Data")
-
-    st.write(
-        f"Total transactions: **{len(df)}**"
+    st.markdown(
+        f"""
+        <div class="panel">
+            <b>Name</b><br>
+            {user["name"]}
+            <br><br>
+            <b>Email</b><br>
+            {user["email"]}
+            <br><br>
+            <b>Account Type</b><br>
+            {user["role"].title()}
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
-    st.write(
-        f"Data file: **{DATA_FILE}**"
+    st.markdown(
+        '<div class="section-title">Monthly Budget</div>',
+        unsafe_allow_html=True
     )
 
-    if st.button("⚠️ Clear All Transactions"):
+    new_budget = st.number_input(
+        "Monthly Budget (Rs)",
+        min_value=0.0,
+        value=float(user["budget"]),
+        step=5000.0
+    )
 
-        save_data(
-            pd.DataFrame(columns=COLUMNS)
+    if st.button(
+        "💾 Save Budget"
+    ):
+
+        update_budget(
+            user["id"],
+            new_budget
         )
 
-        st.success("All transactions cleared.")
+        st.success(
+            "Budget updated successfully."
+        )
 
         st.rerun()
 
@@ -994,6 +1248,6 @@ elif page == "⚙️ Settings":
 
 st.markdown("""
 <div class="footer">
-    FinanceFlow • Personal Finance Dashboard • Built with Python & Streamlit
+    FinanceFlow V2 • Secure Personal Finance Management
 </div>
 """, unsafe_allow_html=True)
